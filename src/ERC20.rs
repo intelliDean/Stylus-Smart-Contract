@@ -10,7 +10,7 @@ use alloy_sol_types::sol;
 use core::marker::PhantomData;
 use stylus_sdk::prelude::*;
 
-pub trait Erc20Params {
+pub trait Immutables {
     const NAME: &'static str;
     const SYMBOL: &'static str;
     const DECIMALS: u8;
@@ -22,7 +22,7 @@ sol! {
 }
 
 sol_storage! {
-    pub struct Erc20<T> {
+    pub struct Token<T> {
 
         address owner;
 
@@ -32,14 +32,13 @@ sol_storage! {
         
         uint256 total_supply;
         
-        /// Used to allow [`Erc20Params`]
+        /// Used to allow [`Immutables`]
         PhantomData<T> phantom;
     }
 }
 
-
 #[public]
-impl<T: Erc20Params> Erc20<T> {
+impl<T: Immutables> Token<T> {
     pub fn name() -> String {
 
         T::NAME.into()
@@ -63,7 +62,7 @@ impl<T: Erc20Params> Erc20<T> {
     pub fn mint(&mut self, address: Address, value: U256) -> Result<(), Erc20Error> {
 
         self.only_owner()?;
-        Erc20::<T>::address_zero_check(&address)?;
+        Token::<T>::address_zero_check(&address)?;
         
         let mut balance = self.balances.setter(address);
         let new_balance = balance.get() + value;
@@ -96,8 +95,8 @@ impl<T: Erc20Params> Erc20<T> {
         
         let msg_sender = self.vm().msg_sender();
 
-        Erc20::<T>::address_zero_check(&msg_sender)?;
-        Erc20::<T>::address_zero_check(&to)?;
+        Token::<T>::address_zero_check(&msg_sender)?;
+        Token::<T>::address_zero_check(&to)?;
 
         let mut sender_allowances = self.allowances.setter(from);
 
@@ -121,7 +120,7 @@ impl<T: Erc20Params> Erc20<T> {
     }
     pub fn approve(&mut self, spender: Address, value: U256) -> bool {
 
-        Erc20::<T>::address_zero_check(&spender);
+        Token::<T>::address_zero_check(&spender);
 
         let msg_sender = self.vm().msg_sender();
 
@@ -171,7 +170,7 @@ impl<T: Erc20Params> Erc20<T> {
 }
 
 
-impl<T: Erc20Params> Erc20<T> {
+impl<T: Immutables> Token<T> {
 
     pub fn set_owner(&mut self, _owner: Address) {
         self.owner.set(_owner);
@@ -192,8 +191,8 @@ impl<T: Erc20Params> Erc20<T> {
     }
     pub fn _transfer(&mut self, from: Address, to: Address, value: U256) -> Result<(), Erc20Error> {
 
-        Erc20::<T>::address_zero_check(&self.vm().msg_sender())?;
-        Erc20::<T>::address_zero_check(&to)?;
+        Token::<T>::address_zero_check(&self.vm().msg_sender())?;
+        Token::<T>::address_zero_check(&to)?;
 
         let mut sender_balance = self.balances.setter(from);
 

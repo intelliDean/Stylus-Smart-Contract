@@ -12,67 +12,74 @@ use ethers::{
     signers::{LocalWallet, Signer},
     types::Address,
 };
-use eyre::eyre;
-use std::io::{BufRead, BufReader};
-use std::str::FromStr;
+use eyre::Error;
+use std::env;
 use std::sync::Arc;
-
-/// Your private key file path.
-const PRIV_KEY_PATH: &str = "PRIV_KEY_PATH";
-
-/// Stylus RPC endpoint url.
-const RPC_URL: &str = "RPC_URL";
-
-/// Deployed pragram address.
-const STYLUS_CONTRACT_ADDRESS: &str = "STYLUS_CONTRACT_ADDRESS";
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     dotenv().ok();
-    let priv_key_path =
-        std::env::var(PRIV_KEY_PATH).map_err(|_| eyre!("No {} env var set", PRIV_KEY_PATH))?;
-    let rpc_url = std::env::var(RPC_URL).map_err(|_| eyre!("No {} env var set", RPC_URL))?;
-    let contract_address = std::env::var(STYLUS_CONTRACT_ADDRESS)
-        .map_err(|_| eyre!("No {} env var set", STYLUS_CONTRACT_ADDRESS))?;
+
+    let rpc_url = env::var("RPC_URL")?;
+    let priv_key_path = env::var("PRIV_KEY_PATH")?;
+
+    let contract_address: Address = env::var("STYLUS_CONTRACT_ADDRESS")?
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid contract address"))
+        .unwrap();
+
+    let provider = Provider::<Http>::try_from(&rpc_url)?.interval(Duration::from_millis(1000));
+    let chain_id = provider.get_chainid().await?.as_u64();
+
+    let wallet = priv_key_path
+        .parse::<LocalWallet>()?
+        .with_chain_id(chain_id);
+    let eth_client = Arc::new(SignerMiddleware::new(provider, wallet.clone()));
+
     abigen!(
-        Counter,
-        r#"[
-            function number() external view returns (uint256)
-            function setNumber(uint256 number) external
-            function increment() external
-        ]"#
+        Degen,
+        r"[
+            function addressZeroCheck() external view
+            function regCheck() external
+            function onlyOwner() external view
+            function playerRegister(string calldata username) external
+            function playGame() external
+            function distributeRewardToPlayers() external
+            function playerP2PTransfer(address recipient, uint256 value) external
+            function suspendPlayer(address _address) external
+            function reinstatePlayer(address _address) external
+            function playerCheckBalance() external view returns (uint256)
+            function playerBurnToken(uint256 value) external
+            function addGameProp(string calldata name, uint256 value) external
+            function playerBuysFromGameStore(bytes32 prop_id) external
+        ]"
     );
 
-    let provider = Provider::<Http>::try_from(rpc_url)?;
-    let address: Address = contract_address.parse()?;
+    let degen = Degen::new(contract_address, eth_client);
+    println!("Contract: {degen:?}");
 
-    let privkey = read_secret_from_file(&priv_key_path)?;
-    let wallet = LocalWallet::from_str(&privkey)?;
-    let chain_id = provider.get_chainid().await?.as_u64();
-    let client = Arc::new(SignerMiddleware::new(
-        provider,
-        wallet.clone().with_chain_id(chain_id),
-    ));
+    let player_address: Address = "0xc6fB3fe7C22220862A1b403e5FECE8F13bcB61CE"
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid contract address"))
+        .unwrap();
 
-    let counter = Counter::new(address, client);
-    let num = counter.number().call().await;
-    println!("Counter number value = {:?}", num);
+    // //todo: player registers => PLAYER
+    // degen.player_register("Dean".to_string()).send().await?;
+    //
+    // println!("Player registers");
 
-    let pending = counter.increment();
-    if let Some(receipt) = pending.send().await?.await? {
-        println!("Receipt = {:?}", receipt);
-    }
-    println!("Successfully incremented counter via a tx");
+    // //TODO: Player plays game => PLAYER
+    // degen.play_game().send().await?;
+    // println!("Player plays game");
+    //
+    // //TODO: Admin distributes reward => ADMIN
+    degen.distribute_reward_to_players().send().await?;
+    println!("Admin distributes rewards");
+    //
+    // // //todo: Player checks balance
+    // let balance = degen.player_check_balance().call().await?;
+    // println!("Player Balance = {:?}", balance);
 
-    let num = counter.number().call().await;
-    println!("New counter number value = {:?}", num);
     Ok(())
-}
-
-fn read_secret_from_file(fpath: &str) -> eyre::Result<String> {
-    let f = std::fs::File::open(fpath)?;
-    let mut buf_reader = BufReader::new(f);
-    let mut secret = String::new();
-    buf_reader.read_line(&mut secret)?;
-    Ok(secret.trim().to_string())
 }

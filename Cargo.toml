@@ -29,7 +29,7 @@ debug = ["stylus-sdk/debug"]
 mini-alloc = ["stylus-sdk/mini-alloc"]
 
 [[bin]]
-name = "stylus-hello-world"
+name = "DegenGame"
 path = "src/main.rs"
 
 [lib]

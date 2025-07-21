@@ -10,7 +10,7 @@ pub mod utility;
 
 use crate::utility::Erc20Error::*;
 use crate::utility::*;
-use crate::ERC20::{Erc20, Erc20Params};
+use crate::ERC20::{Token, Immutables};
 use alloy_sol_types::SolValue;
 use stylus_sdk::prelude::*;
 use stylus_sdk::{
@@ -21,7 +21,7 @@ use stylus_sdk::{
 
 /// Immutable definitions
 pub struct DegenParams;
-impl Erc20Params for DegenParams {
+impl Immutables for DegenParams {
     const NAME: &'static str = "DegenToken";
     const SYMBOL: &'static str = "DGT";
     const DECIMALS: u8 = 18;
@@ -38,7 +38,7 @@ sol_storage! {
         mapping(address => mapping(bytes32 => GameProp)) player_props;
 
          #[borrow]
-        Erc20<DegenParams> erc20;
+        Token<DegenParams> erc20;
     }
 
     struct Player {
@@ -58,7 +58,6 @@ sol_storage! {
 }
 
 #[public]
-// #[implements(IErc20)]
 impl Degen {
     #[constructor]
     // #[payable]
@@ -67,34 +66,6 @@ impl Degen {
 
         self.owner.set(owner);
         self.erc20.set_owner(owner);
-    }
-
-    fn address_zero_check(&self) -> Result<(), Erc20Error> {
-        let caller = self.vm().msg_sender();
-        if caller.is_zero() {
-            return Err(AddressZero(ADDRESS_ZERO { zero: caller }));
-        }
-        Ok(())
-    }
-
-    fn reg_check(&mut self) -> Result<(), Erc20Error> {
-        if !self
-            .players
-            .setter(self.vm().msg_sender())
-            .is_registered
-            .get()
-        {
-            return Err(NotRegistered(YOU_ARE_NOT_REGISTERED {}));
-        }
-        Ok(())
-    }
-
-    fn only_owner(&self) -> Result<(), Erc20Error> {
-        if self.vm().msg_sender() != self.owner.get() {
-            return Err(OnlyOwner(ONLY_OWNER {}));
-        }
-
-        Ok(())
     }
 
     fn player_register(&mut self, username: String) -> Result<(), Erc20Error> {
@@ -139,19 +110,49 @@ impl Degen {
         Ok(())
     }
 
+    fn address_zero_check(&self) -> Result<(), Erc20Error> {
+        let caller = self.vm().msg_sender();
+        if caller.is_zero() {
+            return Err(AddressZero(ADDRESS_ZERO { zero: caller }));
+        }
+        Ok(())
+    }
+
+    fn reg_check(&mut self) -> Result<(), Erc20Error> {
+        if !self
+            .players
+            .setter(self.vm().msg_sender())
+            .is_registered
+            .get()
+        {
+            return Err(NotRegistered(YOU_ARE_NOT_REGISTERED {}));
+        }
+        Ok(())
+    }
+
+    fn only_owner(&self) -> Result<(), Erc20Error> {
+        if self.vm().msg_sender() != self.owner.get() {
+            return Err(OnlyOwner(ONLY_OWNER {}));
+        }
+
+        Ok(())
+    }
+
+
+
     fn distribute_reward_to_players(&mut self) -> Result<(), Erc20Error> {
         self.only_owner()?;
 
-        let array_length = self.all_players.len();
+        let num_of_players = self.all_players.len();
 
-        if array_length < 1 {
+        if num_of_players < 1 {
             return Err(NoPlayer(N0_PLAYERS_TO_REWARD {}));
         }
 
         let mut total_rewards = U64::from(0);
         let mut amount = U64::from(0);
 
-        for i in 0..array_length {
+        for i in 0..num_of_players {
             let player = self
                 .players
                 .setter(self.all_players.get(i).unwrap().player_id.get());
@@ -177,7 +178,7 @@ impl Degen {
 
         stylus_sdk::evm::log(RewardDistributed {
             totalRewards: U256::from(total_rewards),
-            numberOfPlayers: U256::from(array_length),
+            numberOfPlayers: U256::from(num_of_players),
         });
 
         Ok(())
@@ -303,3 +304,6 @@ impl Degen {
         Ok(())
     }
 }
+
+
+//contract assress: 0xa6febd4225232e71a6a46209adb46fd3de1f5bda
